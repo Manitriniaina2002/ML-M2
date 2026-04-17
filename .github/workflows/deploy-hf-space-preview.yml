@@ -2,14 +2,14 @@ name: deploy-hf-space-preview
 
 on:
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+    paths:
+      - "hf_space/**"
+      - ".github/workflows/deploy-hf-space-preview.yml"
   push:
     branches-ignore: ["main", "master"]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+    paths:
+      - "hf_space/**"
+      - ".github/workflows/deploy-hf-space-preview.yml"
   workflow_dispatch:
 
 jobs:

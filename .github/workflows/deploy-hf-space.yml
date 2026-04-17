@@ -3,9 +3,9 @@ name: deploy-hf-space
 on:
   push:
     branches: ["main", "master"]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+    paths:
+      - "hf_space/**"
+      - ".github/workflows/deploy-hf-space.yml"
   workflow_dispatch:
 
 jobs:
