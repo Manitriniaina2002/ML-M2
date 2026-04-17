@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: pokemon-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=True
+      - API_KEY_ENABLED=False
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:8000"]
+    volumes:
+      - ./modele:/app/modele
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - pokemon-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: pokemon-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+    networks:
+      - pokemon-network
+    restart: unless-stopped
+
+networks:
+  pokemon-network:
+    driver: bridge
+
+# Usage:
+# docker-compose up -d          # Démarrer
+# docker-compose down           # Arrêter
+# docker-compose logs -f api    # Logs
+# docker-compose ps             # Status

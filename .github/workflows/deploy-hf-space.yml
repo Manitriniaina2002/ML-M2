@@ -1,0 +1,90 @@
+name: deploy-hf-space
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_SPACE_REPO: ${{ vars.HF_SPACE_REPO }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required config
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "Missing secret HF_TOKEN"
+            exit 1
+          fi
+          if [ -z "${HF_SPACE_REPO}" ]; then
+            echo "Missing variable HF_SPACE_REPO (example: your-username/your-space-name)"
+            exit 1
+          fi
+
+      - name: Install git-lfs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
+
+      - name: Deploy to Hugging Face Space
+        run: |
+          set -euo pipefail
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}" hf-space
+
+          rsync -av --delete \
+            --exclude ".git" \
+            --exclude "__pycache__" \
+            hf_space/ hf-space/
+
+          cd hf-space
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes to deploy"
+            exit 0
+          fi
+
+          git commit -m "Deploy Streamlit Space from GitHub Actions (${GITHUB_SHA::7})"
+          git push
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "=== Deployment debug context ==="
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "actor=${GITHUB_ACTOR}"
+          echo "ref=${GITHUB_REF}"
+          echo "sha=${GITHUB_SHA}"
+          if [ -n "${HF_SPACE_REPO:-}" ]; then
+            echo "HF_SPACE_REPO is set"
+          else
+            echo "HF_SPACE_REPO is missing"
+          fi
+          if [ -n "${HF_TOKEN:-}" ]; then
+            echo "HF_TOKEN is set"
+          else
+            echo "HF_TOKEN is missing"
+          fi
+          echo "--- local files (hf_space) ---"
+          find hf_space -maxdepth 3 -type f | sort || true
+          if [ -d "hf-space" ]; then
+            echo "--- cloned repo status ---"
+            git -C hf-space status || true
+          else
+            echo "hf-space clone directory not found"
+          fi

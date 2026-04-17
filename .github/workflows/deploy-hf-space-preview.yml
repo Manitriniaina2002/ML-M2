@@ -1,0 +1,106 @@
+name: deploy-hf-space-preview
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  push:
+    branches-ignore: ["main", "master"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+jobs:
+  deploy-preview:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_SPACE_REPO_PREVIEW: ${{ vars.HF_SPACE_REPO_PREVIEW }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required config
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "Missing secret HF_TOKEN"
+            exit 1
+          fi
+          if [ -z "${HF_SPACE_REPO_PREVIEW}" ]; then
+            echo "Missing variable HF_SPACE_REPO_PREVIEW (example: your-username/your-preview-space)"
+            exit 1
+          fi
+
+      - name: Set branch context
+        id: branch
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "name=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install git-lfs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
+
+      - name: Deploy preview to Hugging Face Space
+        run: |
+          set -euo pipefail
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO_PREVIEW}" hf-space-preview
+
+          rsync -av --delete \
+            --exclude ".git" \
+            --exclude "__pycache__" \
+            hf_space/ hf-space-preview/
+
+          printf "branch=%s\ncommit=%s\n" "${{ steps.branch.outputs.name }}" "${GITHUB_SHA}" > hf-space-preview/PREVIEW_SOURCE.txt
+
+          cd hf-space-preview
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes to deploy"
+            exit 0
+          fi
+
+          git commit -m "Deploy preview from branch ${{ steps.branch.outputs.name }} (${GITHUB_SHA::7})"
+          git push
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "=== Preview deployment debug context ==="
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "actor=${GITHUB_ACTOR}"
+          echo "ref=${GITHUB_REF}"
+          echo "sha=${GITHUB_SHA}"
+          echo "branch=${{ steps.branch.outputs.name }}"
+          if [ -n "${HF_SPACE_REPO_PREVIEW:-}" ]; then
+            echo "HF_SPACE_REPO_PREVIEW is set"
+          else
+            echo "HF_SPACE_REPO_PREVIEW is missing"
+          fi
+          if [ -n "${HF_TOKEN:-}" ]; then
+            echo "HF_TOKEN is set"
+          else
+            echo "HF_TOKEN is missing"
+          fi
+          echo "--- local files (hf_space) ---"
+          find hf_space -maxdepth 3 -type f | sort || true
+          if [ -d "hf-space-preview" ]; then
+            echo "--- cloned preview repo status ---"
+            git -C hf-space-preview status || true
+          else
+            echo "hf-space-preview clone directory not found"
+          fi
