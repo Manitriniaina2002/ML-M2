@@ -1,6 +1,6 @@
 ---
 title: Pokemon Battle Predictor
-emoji: crossed_swords
+emoji: "⚔️"
 colorFrom: blue
 colorTo: green
 sdk: streamlit
