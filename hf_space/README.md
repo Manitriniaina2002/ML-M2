@@ -13,6 +13,8 @@ pinned: false
 
 Application Streamlit de prediction du taux de victoire Pokemon.
 
+Preview deployment marker: branch preview/hf-space-test.
+
 ## Features
 
 - Saisie des statistiques principales
